@@ -1,27 +1,64 @@
 ---
 driver:
   name: vagrant
-
-## The forwarded_port port feature lets you connect to ports on the VM guest via
-## localhost on the host.
-## see also: https://docs.vagrantup.com/v2/networking/forwarded_ports.html
-
-#  network:
-#    - ["forwarded_port", {guest: 80, host: 8080}]
+  customize:
+          memory: 1024
+          cpus: 1
+  log_level: info
 
 provisioner:
-  name: policyfile_zero
-
-## require_chef_omnibus specifies a specific chef version to install. You can
-## also set this to `true` to always use the latest version.
-## see also: https://docs.chef.io/config_yml_kitchen.html
-
-#  require_chef_omnibus: 12.5.0
+  name: chef_zero
+  chef_omnibus_url: <%= ENV['CHEF_OMNIBUS_URL'] %>
+  require_chef_omnibus: <%= ENV['CHEF_OMNIBUS_VER'] %>
+  client_rb:
+    #https_proxy: <%= ENV['HTTPS_PROXY'] %>
+    #http_proxy: <%= ENV['HTTP_PROXY'] %>
+    no_proxy: <%= ENV['NO_PROXY'] %>
 
 platforms:
-  - name: ubuntu-14.04
-  - name: centos-7.1
+  -
+    driver_config:
+      box: <%= ENV['VAGRANT_BOX_NAME'] %>
+      box_url: <%= ENV['VAGRANT_BOX_URL'] %>
+      require_chef_omnibus: <%= ENV['CHEF_OMNIBUS_VER'] %>
+      chef_omnibus_url: <%= ENV['CHEF_OMNIBUS_URL'] %>
+    name: <%= ENV['VAGRANT_PLATFORM_NAME'] %>
+    driver_plugin: vagrant
 
 suites:
-  - name: default
+  - name: consul-cluster
+    # this is used to setup local consul server for development work
+    driver:
+      vm_hostname: consul-cluster
+      network:
+        - ["private_network", {ip: "192.168.237.15"}]
+    run_list:
+      - recipe[instance_config::consul_server]
     attributes:
+      authorization:
+        sudo:
+          users:
+            - kitchen
+            - vagrant
+      consul:
+        bootstrap_expect: 1
+        advertise_interface: eth1
+        datacenter: vagrant
+        servers: [ '192.168.237.15' ]
+  - name: consul-client
+    driver:
+      vm_hostname: consul-client
+      network:
+      - ["private_network", {ip: "192.168.237.17"}]
+    run_list:
+      # Uncomment instance_config if using for cookbook_tgtcfg, not required for role cookbooks
+      # - recipe[instance_config::default]
+      # ADD YOUR RECIPE HERE <<<<<<======
+    data_bags_path: <%= ENV['KITCHEN_DATA_BAGS_PATH'] %>
+    encrypted_data_bag_secret_key_path: <%= ENV['KITCHEN_ENCRYPTED_DATA_BAG_SECRET_KEY_PATH'] %>
+    attributes:
+      consul:
+        datacenter: vagrant
+        advertise_interface: eth1
+        client_interface: eth1
+        servers: [ '192.168.237.15' ]
